@@ -32,7 +32,7 @@ To install the development version, do the following:
 
 .. code:: sh
 
-    $ cd discorder
+    git clone https://github.com/Alex-Stepens/discorder
     $ python3 -m pip install discorder
 
 
