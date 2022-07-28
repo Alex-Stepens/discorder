@@ -28,12 +28,10 @@ discorder
 
 
 
-To install the development version, do the following:
-
 .. code:: sh
 
     git clone https://github.com/Alex-Stepens/discorder
-    $ python3 -m pip install discorder
+    pip install discord 
 
 
 Дополнительные пакеты
@@ -42,47 +40,16 @@ To install the development version, do the following:
 * `PyNaCl <https://pypi.org/project/PyNaCl/>`__ (для голосовой активности)
 
 
-Self бот
+пример бота
 --------------
 
 .. code:: py
 
-    import discord
-
-    class MyClient(discord.Client):
-        async def on_ready(self):
-            print('Logged on as', self.user)
-
-        async def on_message(self, message):
-            # don't respond to ourselves
-            if message.author == self.user:
-                return
-
-            if message.content == 'ping':
-                await message.channel.send('pong')
-
-    intents = discord.Intents.default()
-    intents.message_content = True
-    client = MyClient(intents=intents)
-    client.run('token')
+ Делается 
 
 Пример  бота
 ~~~~~~~~~~~~~
 
-.. code:: py
-
-    import discord
-    from discord.ext import commands
-
-    intents = discord.Intents.default()
-    intents.message_content = True
-    bot = commands.Bot(command_prefix='>', intents=intents)
-
-    @bot.command()
-    async def ping(ctx):
-        await ctx.send('pong')
-
-    bot.run('token')
 
 
 
