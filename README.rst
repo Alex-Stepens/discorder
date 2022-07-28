@@ -21,8 +21,8 @@ discorder
 
 
 .. code:: sh
-    pip install discord #для работы с библиотекой 
-    git clone https://github.com/Alex-Stepens/discorder
+    pip install discord 
+    
 
 
 
