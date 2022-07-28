@@ -11,7 +11,7 @@ discorder
    :target: https://pypi.python.org/pypi/discord.py
    :alt: PyPI supported Python versions
 
-``Библиотка для написания discord ботов``
+Библиотка для написания discord ботов
 
 
 Установка 
@@ -22,7 +22,6 @@ discorder
 
 .. code:: sh
     pip install discord #для работы с библиотекой 
-
     git clone https://github.com/Alex-Stepens/discorder
 
 
