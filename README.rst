@@ -11,7 +11,7 @@ discorder
    :target: https://pypi.python.org/pypi/discord.py
    :alt: PyPI supported Python versions
 
-Скоротсное Api для ``discord`` построеное на ``Python``
+``Библиотка для написания discord ботов``
 
 
 Установка 
@@ -21,22 +21,12 @@ discorder
 
 
 .. code:: sh
+    pip install discord #для работы с библиотекой 
 
-    # Linux/macOS
-    python3 -m pip install -U discorder
+    git clone https://github.com/Alex-Stepens/discorder
 
-    # Windows
-    py -3 -m pip install -U discorder
 
-Для поддержки голосовой активности:
 
-.. code:: sh
-
-    # Linux/macOS
-    python3 -m pip install -U "discorder[voice]"
-
-    # Windows
-    py -3 -m pip install -U discorder[voice]
 
 
 To install the development version, do the following:
