@@ -4,12 +4,8 @@ discorder
 .. image:: https://media.discordapp.net/attachments/978777405621674024/997511466427105310/lv_0_20220707215402.gif
    :target: https://discord.gg/bGrtrxnWKj
    :alt:  Discord сервер
-.. image:: https://img.shields.io/pypi/v/discord.py.svg
-   :target: https://pypi.python.org/pypi/discord.py
-   :alt: PyPI version info
+
 .. image:: https://img.shields.io/pypi/pyversions/discord.py.svg
-   :target: https://pypi.python.org/pypi/discord.py
-   :alt: PyPI supported Python versions
 
 Библиотка для написания discord ботов
 
