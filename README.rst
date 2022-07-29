@@ -1,7 +1,7 @@
 discorder
 ==========
 
-.. image:: https://media.discordapp.net/attachments/978777405621674024/997511466427105310/lv_0_20220707215402.gif
+.. image:: https://thumbs.gfycat.com/RepulsiveQuaintGalapagoshawk-max-1mb.gif
    :target: https://discord.gg/bGrtrxnWKj
    :alt:  Discord сервер
 
