@@ -23,390 +23,257 @@ DEALINGS IN THE SOFTWARE.
 """
 
 from __future__ import annotations
-
-from typing import Any, TYPE_CHECKING, List, Optional, Type, Union
-
-
-from ..enums import AppCommandOptionType, AppCommandType
-from ..errors import DiscordException
-
-__all__ = (
-    'AppCommandError',
-    'CommandInvokeError',
-    'TransformerError',
-    'CheckFailure',
-    'CommandAlreadyRegistered',
-    'CommandSignatureMismatch',
-    'CommandNotFound',
-    'CommandLimitReached',
-    'NoPrivateMessage',
-    'MissingRole',
-    'MissingAnyRole',
-    'MissingPermissions',
-    'BotMissingPermissions',
-    'CommandOnCooldown',
-    'MissingApplicationID',
-)
+from typing import Dict, List, Optional, TYPE_CHECKING, Any, Tuple, Union
 
 if TYPE_CHECKING:
-    from .commands import Command, Group, ContextMenu
-    from .transformers import Transformer
-    from ..types.snowflake import Snowflake, SnowflakeList
-    from .checks import Cooldown
+    from aiohttp import ClientResponse, ClientWebSocketResponse
+    from requests import Response
 
-APP_ID_NOT_FOUND = (
-    'Client does not have an application_id set. Either the function was called before on_ready '
-    'was called or application_id was not passed to the Client constructor.'
+    _ResponseType = Union[ClientResponse, Response]
+
+    from .interactions import Interaction
+
+__all__ = (
+    'DiscordException',
+    'ClientException',
+    'GatewayNotFound',
+    'HTTPException',
+    'RateLimited',
+    'Forbidden',
+    'NotFound',
+    'DiscordServerError',
+    'InvalidData',
+    'LoginFailure',
+    'ConnectionClosed',
+    'PrivilegedIntentsRequired',
+    'InteractionResponded',
 )
 
 
-class AppCommandError(DiscordException):
-    """The base exception type for all application command related errors.
+class DiscordException(Exception):
+    """Base exception class for discord.py
 
-    This inherits from :exc:`discord.DiscordException`.
-
-    This exception and exceptions inherited from it are handled
-    in a special way as they are caught and passed into various error handlers
-    in this order:
-
-    - :meth:`Command.error <discord.app_commands.Command.error>`
-    - :meth:`Group.on_error <discord.app_commands.Group.on_error>`
-    - :meth:`CommandTree.on_error <discord.app_commands.CommandTree.on_error>`
-
-    .. versionadded:: 2.0
+    Ideally speaking, this could be caught to handle any exceptions raised from this library.
     """
 
     pass
 
 
-class CommandInvokeError(AppCommandError):
-    """An exception raised when the command being invoked raised an exception.
+class ClientException(DiscordException):
+    """Exception that's raised when an operation in the :class:`Client` fails.
 
-    This inherits from :exc:`~discord.app_commands.AppCommandError`.
-
-    .. versionadded:: 2.0
-
-    Attributes
-    -----------
-    original: :exc:`Exception`
-        The original exception that was raised. You can also get this via
-        the ``__cause__`` attribute.
-    command: Union[:class:`Command`, :class:`ContextMenu`]
-        The command that failed.
+    These are usually for exceptions that happened due to user input.
     """
 
-    def __init__(self, command: Union[Command[Any, ..., Any], ContextMenu], e: Exception) -> None:
-        self.original: Exception = e
-        self.command: Union[Command[Any, ..., Any], ContextMenu] = command
-        super().__init__(f'Command {command.name!r} raised an exception: {e.__class__.__name__}: {e}')
+    pass
 
 
-class TransformerError(AppCommandError):
-    """An exception raised when a :class:`Transformer` or type annotation fails to
-    convert to its target type.
+class GatewayNotFound(DiscordException):
+    """An exception that is raised when the gateway for Discord could not be found"""
 
-    This inherits from :exc:`~discord.app_commands.AppCommandError`.
+    def __init__(self):
+        message = 'The gateway to connect to discord was not found.'
+        super().__init__(message)
 
-    If an exception occurs while converting that does not subclass
-    :exc:`AppCommandError` then the exception is wrapped into this exception.
-    The original exception can be retrieved using the ``__cause__`` attribute.
-    Otherwise if the exception derives from :exc:`AppCommandError` then it will
-    be propagated as-is.
 
-    .. versionadded:: 2.0
+def _flatten_error_dict(d: Dict[str, Any], key: str = '') -> Dict[str, str]:
+    items: List[Tuple[str, str]] = []
+    for k, v in d.items():
+        new_key = key + '.' + k if key else k
 
-    Attributes
-    -----------
-    value: Any
-        The value that failed to convert.
-    type: :class:`~discord.AppCommandOptionType`
-        The type of argument that failed to convert.
-    transformer: Type[:class:`Transformer`]
-        The transformer that failed the conversion.
-    """
-
-    def __init__(self, value: Any, opt_type: AppCommandOptionType, transformer: Type[Transformer]):
-        self.value: Any = value
-        self.type: AppCommandOptionType = opt_type
-        self.transformer: Type[Transformer] = transformer
-
-        try:
-            result_type = transformer.transform.__annotations__['return']
-        except KeyError:
-            name = transformer.__name__
-            if name.endswith('Transformer'):
-                result_type = name[:-11]
+        if isinstance(v, dict):
+            try:
+                _errors: List[Dict[str, Any]] = v['_errors']
+            except KeyError:
+                items.extend(_flatten_error_dict(v, new_key).items())
             else:
-                result_type = name
+                items.append((new_key, ' '.join(x.get('message', '') for x in _errors)))
         else:
-            if isinstance(result_type, type):
-                result_type = result_type.__name__
+            items.append((new_key, v))
 
-        super().__init__(f'Failed to convert {value} to {result_type!s}')
+    return dict(items)
 
 
-class CheckFailure(AppCommandError):
-    """An exception raised when check predicates in a command have failed.
+class HTTPException(DiscordException):
+    """Exception that's raised when an HTTP request operation fails.
 
-    This inherits from :exc:`~discord.app_commands.AppCommandError`.
+    Attributes
+    ------------
+    response: :class:`aiohttp.ClientResponse`
+        The response of the failed HTTP request. This is an
+        instance of :class:`aiohttp.ClientResponse`. In some cases
+        this could also be a :class:`requests.Response`.
+
+    text: :class:`str`
+        The text of the error. Could be an empty string.
+    status: :class:`int`
+        The status code of the HTTP request.
+    code: :class:`int`
+        The Discord specific error code for the failure.
+    """
+
+    def __init__(self, response: _ResponseType, message: Optional[Union[str, Dict[str, Any]]]):
+        self.response: _ResponseType = response
+        self.status: int = response.status  # type: ignore # This attribute is filled by the library even if using requests
+        self.code: int
+        self.text: str
+        if isinstance(message, dict):
+            self.code = message.get('code', 0)
+            base = message.get('message', '')
+            errors = message.get('errors')
+            if errors:
+                errors = _flatten_error_dict(errors)
+                helpful = '\n'.join('In %s: %s' % t for t in errors.items())
+                self.text = base + '\n' + helpful
+            else:
+                self.text = base
+        else:
+            self.text = message or ''
+            self.code = 0
+
+        fmt = '{0.status} {0.reason} (error code: {1})'
+        if len(self.text):
+            fmt += ': {2}'
+
+        super().__init__(fmt.format(self.response, self.code, self.text))
+
+
+class RateLimited(DiscordException):
+    """Exception that's raised for when status code 429 occurs
+    and the timeout is greater than the configured maximum using
+    the ``max_ratelimit_timeout`` parameter in :class:`Client`.
+
+    This is not raised during global ratelimits.
+
+    Since sometimes requests are halted pre-emptively before they're
+    even made, **this does not subclass :exc:`HTTPException`.**
 
     .. versionadded:: 2.0
+
+    Attributes
+    ------------
+    retry_after: :class:`float`
+        The amount of seconds that the client should wait before retrying
+        the request.
+    """
+
+    def __init__(self, retry_after: float):
+        self.retry_after = retry_after
+        super().__init__(f'Too many requests. Retry in {retry_after:.2f} seconds.')
+
+
+class Forbidden(HTTPException):
+    """Exception that's raised for when status code 403 occurs.
+
+    Subclass of :exc:`HTTPException`
     """
 
     pass
 
 
-class NoPrivateMessage(CheckFailure):
-    """An exception raised when a command does not work in a direct message.
+class NotFound(HTTPException):
+    """Exception that's raised for when status code 404 occurs.
 
-    This inherits from :exc:`~discord.app_commands.CheckFailure`.
-
-    .. versionadded:: 2.0
+    Subclass of :exc:`HTTPException`
     """
 
-    def __init__(self, message: Optional[str] = None) -> None:
-        super().__init__(message or 'This command cannot be used in direct messages.')
+    pass
 
 
-class MissingRole(CheckFailure):
-    """An exception raised when the command invoker lacks a role to run a command.
+class DiscordServerError(HTTPException):
+    """Exception that's raised for when a 500 range status code occurs.
 
-    This inherits from :exc:`~discord.app_commands.CheckFailure`.
+    Subclass of :exc:`HTTPException`.
 
-    .. versionadded:: 2.0
+    .. versionadded:: 1.5
+    """
+
+    pass
+
+
+class InvalidData(ClientException):
+    """Exception that's raised when the library encounters unknown
+    or invalid data from Discord.
+    """
+
+    pass
+
+
+class LoginFailure(ClientException):
+    """Exception that's raised when the :meth:`Client.login` function
+    fails to log you in from improper credentials or some other misc.
+    failure.
+    """
+
+    pass
+
+
+class ConnectionClosed(ClientException):
+    """Exception that's raised when the gateway connection is
+    closed for reasons that could not be handled internally.
 
     Attributes
     -----------
-    missing_role: Union[:class:`str`, :class:`int`]
-        The required role that is missing.
-        This is the parameter passed to :func:`~discord.app_commands.checks.has_role`.
+    code: :class:`int`
+        The close code of the websocket.
+    reason: :class:`str`
+        The reason provided for the closure.
+    shard_id: Optional[:class:`int`]
+        The shard ID that got closed if applicable.
     """
 
-    def __init__(self, missing_role: Snowflake) -> None:
-        self.missing_role: Snowflake = missing_role
-        message = f'Role {missing_role!r} is required to run this command.'
-        super().__init__(message)
+    def __init__(self, socket: ClientWebSocketResponse, *, shard_id: Optional[int], code: Optional[int] = None):
+        # This exception is just the same exception except
+        # reconfigured to subclass ClientException for users
+        self.code: int = code or socket.close_code or -1
+        # aiohttp doesn't seem to consistently provide close reason
+        self.reason: str = ''
+        self.shard_id: Optional[int] = shard_id
+        super().__init__(f'Shard ID {self.shard_id} WebSocket closed with {self.code}')
 
 
-class MissingAnyRole(CheckFailure):
-    """An exception raised when the command invoker lacks any of the roles
-    specified to run a command.
+class PrivilegedIntentsRequired(ClientException):
+    """Exception that's raised when the gateway is requesting privileged intents
+    but they're not ticked in the developer page yet.
 
-    This inherits from :exc:`~discord.app_commands.CheckFailure`.
+    Go to https://discord.com/developers/applications/ and enable the intents
+    that are required. Currently these are as follows:
 
-    .. versionadded:: 2.0
+    - :attr:`Intents.members`
+    - :attr:`Intents.presences`
+    - :attr:`Intents.message_content`
 
     Attributes
     -----------
-    missing_roles: List[Union[:class:`str`, :class:`int`]]
-        The roles that the invoker is missing.
-        These are the parameters passed to :func:`~discord.app_commands.checks.has_any_role`.
+    shard_id: Optional[:class:`int`]
+        The shard ID that got closed if applicable.
     """
 
-    def __init__(self, missing_roles: SnowflakeList) -> None:
-        self.missing_roles: SnowflakeList = missing_roles
-
-        missing = [f"'{role}'" for role in missing_roles]
-
-        if len(missing) > 2:
-            fmt = '{}, or {}'.format(', '.join(missing[:-1]), missing[-1])
-        else:
-            fmt = ' or '.join(missing)
-
-        message = f'You are missing at least one of the required roles: {fmt}'
-        super().__init__(message)
-
-
-class MissingPermissions(CheckFailure):
-    """An exception raised when the command invoker lacks permissions to run a
-    command.
-
-    This inherits from :exc:`~discord.app_commands.CheckFailure`.
-
-    .. versionadded:: 2.0
-
-    Attributes
-    -----------
-    missing_permissions: List[:class:`str`]
-        The required permissions that are missing.
-    """
-
-    def __init__(self, missing_permissions: List[str], *args: Any) -> None:
-        self.missing_permissions: List[str] = missing_permissions
-
-        missing = [perm.replace('_', ' ').replace('guild', 'server').title() for perm in missing_permissions]
-
-        if len(missing) > 2:
-            fmt = '{}, and {}'.format(", ".join(missing[:-1]), missing[-1])
-        else:
-            fmt = ' and '.join(missing)
-        message = f'You are missing {fmt} permission(s) to run this command.'
-        super().__init__(message, *args)
-
-
-class BotMissingPermissions(CheckFailure):
-    """An exception raised when the bot's member lacks permissions to run a
-    command.
-
-    This inherits from :exc:`~discord.app_commands.CheckFailure`.
-
-    .. versionadded:: 2.0
-
-    Attributes
-    -----------
-    missing_permissions: List[:class:`str`]
-        The required permissions that are missing.
-    """
-
-    def __init__(self, missing_permissions: List[str], *args: Any) -> None:
-        self.missing_permissions: List[str] = missing_permissions
-
-        missing = [perm.replace('_', ' ').replace('guild', 'server').title() for perm in missing_permissions]
-
-        if len(missing) > 2:
-            fmt = '{}, and {}'.format(", ".join(missing[:-1]), missing[-1])
-        else:
-            fmt = ' and '.join(missing)
-        message = f'Bot requires {fmt} permission(s) to run this command.'
-        super().__init__(message, *args)
-
-
-class CommandOnCooldown(CheckFailure):
-    """An exception raised when the command being invoked is on cooldown.
-
-    This inherits from :exc:`~discord.app_commands.CheckFailure`.
-
-    .. versionadded:: 2.0
-
-    Attributes
-    -----------
-    cooldown: :class:`~discord.app_commands.Cooldown`
-        The cooldown that was triggered.
-    retry_after: :class:`float`
-        The amount of seconds to wait before you can retry again.
-    """
-
-    def __init__(self, cooldown: Cooldown, retry_after: float) -> None:
-        self.cooldown: Cooldown = cooldown
-        self.retry_after: float = retry_after
-        super().__init__(f'You are on cooldown. Try again in {retry_after:.2f}s')
-
-
-class CommandAlreadyRegistered(AppCommandError):
-    """An exception raised when a command is already registered.
-
-    This inherits from :exc:`~discord.app_commands.AppCommandError`.
-
-    .. versionadded:: 2.0
-
-    Attributes
-    -----------
-    name: :class:`str`
-        The name of the command already registered.
-    guild_id: Optional[:class:`int`]
-        The guild ID this command was already registered at.
-        If ``None`` then it was a global command.
-    """
-
-    def __init__(self, name: str, guild_id: Optional[int]):
-        self.name: str = name
-        self.guild_id: Optional[int] = guild_id
-        super().__init__(f'Command {name!r} already registered.')
-
-
-class CommandNotFound(AppCommandError):
-    """An exception raised when an application command could not be found.
-
-    This inherits from :exc:`~discord.app_commands.AppCommandError`.
-
-    .. versionadded:: 2.0
-
-    Attributes
-    ------------
-    name: :class:`str`
-        The name of the application command not found.
-    parents: List[:class:`str`]
-        A list of parent command names that were previously found
-        prior to the application command not being found.
-    type: :class:`~discord.AppCommandType`
-        The type of command that was not found.
-    """
-
-    def __init__(self, name: str, parents: List[str], type: AppCommandType = AppCommandType.chat_input):
-        self.name: str = name
-        self.parents: List[str] = parents
-        self.type: AppCommandType = type
-        super().__init__(f'Application command {name!r} not found')
-
-
-class CommandLimitReached(AppCommandError):
-    """An exception raised when the maximum number of application commands was reached
-    either globally or in a guild.
-
-    This inherits from :exc:`~discord.app_commands.AppCommandError`.
-
-    .. versionadded:: 2.0
-
-    Attributes
-    ------------
-    type: :class:`~discord.AppCommandType`
-        The type of command that reached the limit.
-    guild_id: Optional[:class:`int`]
-        The guild ID that reached the limit or ``None`` if it was global.
-    limit: :class:`int`
-        The limit that was hit.
-    """
-
-    def __init__(self, guild_id: Optional[int], limit: int, type: AppCommandType = AppCommandType.chat_input):
-        self.guild_id: Optional[int] = guild_id
-        self.limit: int = limit
-        self.type: AppCommandType = type
-
-        lookup = {
-            AppCommandType.chat_input: 'slash commands',
-            AppCommandType.message: 'message context menu commands',
-            AppCommandType.user: 'user context menu commands',
-        }
-        desc = lookup.get(type, 'application commands')
-        ns = 'globally' if self.guild_id is None else f'for guild ID {self.guild_id}'
-        super().__init__(f'maximum number of {desc} exceeded {limit} {ns}')
-
-
-class CommandSignatureMismatch(AppCommandError):
-    """An exception raised when an application command from Discord has a different signature
-    from the one provided in the code. This happens because your command definition differs
-    from the command definition you provided Discord. Either your code is out of date or the
-    data from Discord is out of sync.
-
-    This inherits from :exc:`~discord.app_commands.AppCommandError`.
-
-    .. versionadded:: 2.0
-
-    Attributes
-    ------------
-    command: Union[:class:`~.app_commands.Command`, :class:`~.app_commands.ContextMenu`, :class:`~.app_commands.Group`]
-        The command that had the signature mismatch.
-    """
-
-    def __init__(self, command: Union[Command[Any, ..., Any], ContextMenu, Group]):
-        self.command: Union[Command[Any, ..., Any], ContextMenu, Group] = command
+    def __init__(self, shard_id: Optional[int]):
+        self.shard_id: Optional[int] = shard_id
         msg = (
-            f'The signature for command {command.name!r} is different from the one provided by Discord. '
-            'This can happen because either your code is out of date or you have not synced the '
-            'commands with Discord, causing the mismatch in data. It is recommended to sync the '
-            'command tree to fix this issue.'
+            'Shard ID %s is requesting privileged intents that have not been explicitly enabled in the '
+            'developer portal. It is recommended to go to https://discord.com/developers/applications/ '
+            'and explicitly enable the privileged intents within your application\'s page. If this is not '
+            'possible, then consider disabling the privileged intents instead.'
         )
-        super().__init__(msg)
+        super().__init__(msg % shard_id)
 
 
-class MissingApplicationID(AppCommandError):
-    """An exception raised when the client does not have an application ID set.
-    An application ID is required for syncing application commands.
+class InteractionResponded(ClientException):
+    """Exception that's raised when sending another interaction response using
+    :class:`InteractionResponse` when one has already been done before.
 
-    This inherits from :exc:`~discord.app_commands.AppCommandError`.
+    An interaction can only respond once.
 
     .. versionadded:: 2.0
+
+    Attributes
+    -----------
+    interaction: :class:`Interaction`
+        The interaction that's already been responded to.
     """
 
-    def __init__(self, message: Optional[str] = None):
-        super().__init__(message or APP_ID_NOT_FOUND)
+    def __init__(self, interaction: Interaction):
+        self.interaction: Interaction = interaction
+        super().__init__('This interaction has already been responded to before')
